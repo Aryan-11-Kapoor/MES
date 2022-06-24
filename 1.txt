@@ -1,0 +1,300 @@
+#include "PES2UG20CS086_H.h"
+void gcod(cod *c, FILE *fp)
+{
+    fscanf(fp, "%d %d\n", &c->x, &c->y);
+}
+void read_map(FILE *fp, v_node *adjli)
+{
+    int vertex = 1;
+    int row = 0;
+    int col = 0;
+    char ch;
+
+    while ((ch = fgetc(fp)) != EOF)
+    {
+        switch (ch)
+        {
+        case '0':
+            adjli[vertex].next = NULL;
+            adjli[vertex].vid = vertex;
+            adjli[vertex].loc.x = row;
+            adjli[vertex].loc.y = col;
+
+            vertex++;
+            col++;
+            break;
+
+        case '1':
+            col++;
+            break;
+        
+        case '\n':
+            col = 0;
+            row++;
+            break;
+        
+        default:
+            break;
+        }
+    }
+
+    create_adjli(adjli, vertex);
+}
+
+int num_v(FILE *fp)
+{
+    int vertices = 0;
+    long int initial = ftell(fp);
+    char ch;
+
+    while ((ch = fgetc(fp)) != EOF)
+    {
+        if (ch == '0')
+            vertices++;
+    }
+    fseek(fp, initial, SEEK_SET);
+    return vertices;
+}
+
+void insert_vnode(v_node *adjli, int src, int dest)
+{
+    v_node *temp = (v_node *) malloc(sizeof(v_node));
+    temp->loc = adjli[dest].loc;
+    temp->vid = adjli[dest].vid;
+
+    temp->next = adjli[src].next;
+    adjli[src].next = temp;
+}
+
+void create_adjli(v_node *adjli, int vertices)
+{
+    cod curr, temp;
+    for (int i = 1; i <= vertices; i++) // source
+    {
+        curr.x = adjli[i].loc.x;
+        curr.y = adjli[i].loc.y;
+        for (int j = i + 1; (j <= vertices) && (adjli[j].loc.x < curr.x + 2); j++)
+        {
+            temp.x = adjli[j].loc.x;
+            temp.y = adjli[j].loc.y;
+
+            if ( (temp.x == curr.x && temp.y == curr.y + 1) // destination
+                || (temp.y == curr.y && temp.x == curr.x + 1)
+            )
+            {
+                insert_vnode(adjli, i, j);
+            }
+        }
+    }
+}
+
+void display_adjli(v_node *adjli, int vertices)
+{
+    v_node *temp; // for traversal
+    printf("\nVID -> (x-cord, y-cord)\n");
+    for (int i = 1; i <= vertices; i++)
+    {
+        printf("\n%2d -> (%d, %d): ", adjli[i].vid, adjli[i].loc.x, adjli[i].loc.y);
+        
+        temp = adjli[i].next;
+        while (temp != NULL)
+        {
+            if (temp->next != NULL)
+                printf(" [%d -> (%d, %d)] -->", temp->vid, temp->loc.x, temp->loc.y);
+            else
+                printf(" [%d -> (%d, %d)]", temp->vid, temp->loc.x, temp->loc.y);
+            temp = temp->next;
+        }
+    }
+}
+
+int find_ver(v_node *adjli, cod *loc, int vertices)
+{
+    for (int i = 1; i <= vertices; i++)
+    {
+        if (adjli[i].loc.x == loc->x && adjli[i].loc.y == loc->y)
+            return adjli[i].vid;
+    }
+    return -1;
+}
+
+void find_path(v_node *adjli, int startv, int endv, int vertices, int *dfsres, int *bfsres, int *dfspath, int *bfspath)
+{
+    if (endv == -1)
+    {
+        printf("\nDestination vertex not found.");
+    }
+    else if (startv != -1)
+    {
+        // DFS
+        int length = 0;
+        int *visited = (int *) calloc(vertices + 1, sizeof(int));
+        *dfsres = dfs(adjli, startv, endv, visited, length, dfspath);
+
+        // BFS
+        visited = (int *) calloc(vertices + 1, sizeof(int));
+        int *prev = (int *) calloc(vertices + 1, sizeof(int));
+        bfs(adjli, startv, endv, visited, vertices, prev);
+        *bfsres = reconfrom_bfs(adjli, startv, endv, bfspath, prev);
+
+        free(visited);
+    }
+    else
+        printf("\nSource Vertex Not Found");
+}
+
+int dfs(v_node *adjli, int s, int d, int *visited, int length, int *path)
+{
+    int t;
+    v_node *p;
+    visited[s] = 1;
+    path[length] = s;
+
+    for (p = adjli[s].next; p != NULL; p = p->next)
+    {
+        t = p->vid;
+        if (visited[t] == 0)
+        {
+            length++;
+            path[length] = t;
+            if ((t == d) || dfs(adjli, t, d, visited, length, path))
+            {
+                return 1;
+            }
+        }
+    }
+    length--;
+    return 0;
+}
+
+void bfs(v_node *adjli, int s, int d, int *visited, int vertices, int *prev)
+{
+    int front, rear;
+    int a, b;
+    v_node *p;
+    int *queue = (int *) calloc(vertices, sizeof(int));
+
+    front = rear = -1;
+    visited[s] = 1;
+    qinsert(queue, &front, &rear, s);
+
+    while (!qisempty(&front))
+    {
+        a = qdelete(queue, &front, &rear);
+
+        for (p = adjli[a].next; p != NULL; p = p->next)
+        {
+            b = p->vid;
+            if (visited[b] == 0)
+            {
+                visited[b] = 1;
+                prev[b] = a;
+                qinsert(queue, &front, &rear, b);
+            }
+        }
+    }
+
+    free(queue);
+}
+
+int reconfrom_bfs(v_node* adjli, int startv, int endv, int *bfspath, int *prev)
+{
+    int index = 0;
+    int length, temp;
+    for (int v = endv; v != 0; v = prev[v])
+    {
+        bfspath[index] = v;
+        index++;
+    }
+
+    length = index - 1;
+
+    
+    for (int i = 0; i <= (index / 2); i++, length--)
+    {
+        temp = bfspath[length];
+        bfspath[length] = bfspath[i];
+        bfspath[i] = temp;
+    }    
+
+    if (bfspath[0] != startv)
+        return 0;
+    return 1;
+}
+
+void qinsert(int *q, int *f, int *r, int k)
+{
+    ++*r;
+    q[*r] = k;
+
+    if (*f == -1)
+        *f = 0;
+}
+
+int qdelete(int *q, int *f, int *r)
+{
+    int t;
+    t = q[*f];
+
+    if (*f == *r)
+        *f = *r = -1;
+    else
+        ++*f;
+    return t;
+}
+
+int qisempty(int *f)
+{
+    if (*f == -1)
+        return 1;
+    return 0;
+}
+
+void store_path(v_node *adjli, int startv, int endv, int vertices, int dfsres, int bfsres, int *dfspath, int *bfspath)
+{
+    int temp = -1;
+    FILE *fpout_dfs = fopen("PES2UG20CS086_outdfs.txt", "w+");
+    FILE *fpout_bfs = fopen("PES2UG20CS086_outbfs.txt", "w+");
+
+    if (dfsres)
+    {
+        printf("\nPath found by DFS\n");
+        for (int i = 0; temp != endv; i++)
+        {
+            temp = dfspath[i];
+            if (temp != 0)
+            {
+                fprintf(fpout_dfs, "%d -> (%d, %d)\n", adjli[temp].vid, adjli[temp].loc.x, adjli[temp].loc.y);
+            }
+        }
+    }
+    else
+    {
+        printf("\nPath not found by DFS\n");
+        fprintf(fpout_dfs, "%d\n", -1);
+    }
+
+    temp = -1;
+    if (bfsres)
+    {
+        printf("\nPath found by BFS\n");
+        for (int i = 0; temp != endv; i++)
+        {
+            temp = bfspath[i];
+            if (temp != 0)
+            {
+                fprintf(fpout_bfs, "%d -> (%d, %d)\n", adjli[temp].vid, adjli[temp].loc.x, adjli[temp].loc.y);
+            }
+        }
+    }
+    else
+    {
+        printf("\nPath not found by BFS\n");
+        fprintf(fpout_bfs, "%d\n", -1);
+    }
+
+    printf("\nOutput Files Generated.");
+
+    free(dfspath);
+    free(bfspath);
+}
